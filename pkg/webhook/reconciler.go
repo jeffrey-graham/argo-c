@@ -107,9 +107,12 @@ func (c *HTTPGitHubClient) checkResponseError(resp *http.Response) error {
 	case http.StatusUnauthorized:
 		return fmt.Errorf("%w: status %d body: %s", ErrUnauthorized, resp.StatusCode, string(body))
 	case http.StatusForbidden:
+		if resp.Header.Get("X-RateLimit-Remaining") == "0" {
+			return fmt.Errorf("%w: secondary/primary rate limit exhausted (status %d): %s", ErrRateLimited, resp.StatusCode, string(body))
+		}
 		return fmt.Errorf("%w: status %d body: %s", ErrForbidden, resp.StatusCode, string(body))
 	case http.StatusTooManyRequests:
-		return fmt.Errorf("%w: status %d body: %s", ErrRateLimited, resp.StatusCode, string(body))
+		return fmt.Errorf("%w: status %d retry-after %q body: %s", ErrRateLimited, resp.StatusCode, resp.Header.Get("Retry-After"), string(body))
 	case http.StatusInternalServerError, http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
 		return fmt.Errorf("%w: status %d body: %s", ErrServerError, resp.StatusCode, string(body))
 	default:
